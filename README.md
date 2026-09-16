@@ -1,3 +1,4 @@
+#written and updated by venkanna pydikondala
 # Workplace Management / Occupancy Platform
 
 Single-account AWS lab baseline with exactly three durable environments: **DEV, UAT and PROD**. Production uses native ECS blue/green for the ALB-facing inbound/API service.
