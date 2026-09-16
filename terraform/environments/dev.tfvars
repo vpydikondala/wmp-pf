@@ -32,21 +32,21 @@ deployment = {
 
   processing_queue = true
   datalake_queue   = true
-  sns               = true
+  sns              = true
 
   rds = true
 
-  ecs_cluster       = true
-  inbound_service   = true
-  outbound_service  = false
-  processor_service = true
-  management_service = true
+  ecs_cluster        = false
+  inbound_service    = false
+  outbound_service   = false
+  processor_service  = false
+  management_service = false
 
   vpc_endpoints = {
-    s3   = true
-    ecr  = true
-    sqs  = true
-    kms  = true
+    s3              = true
+    ecr             = true
+    sqs             = true
+    kms             = true
     logs            = true
     sts             = true
     secrets_manager = true
@@ -58,8 +58,8 @@ alb_ingress_cidrs   = []
 
 cloudfront_aliases             = []
 cloudfront_acm_certificate_arn = null
-route53_zone_id                 = null
-route53_zone_name               = null
+route53_zone_id                = null
+route53_zone_name              = null
 
 rds_multi_az = false
 
@@ -68,8 +68,8 @@ container_image_tag = "bootstrap"
 
 # Application integration runtime. In lower environments this may point to an
 # approved externally reachable mock/DevNet endpoint instead of production Meraki.
-meraki_base_url                  = "https://api.meraki.com/api/v1"
-meraki_poll_paths                = "/organizations"
-meraki_poll_interval_seconds     = 300
-webhook_auth_required            = true
-processor_poll_wait_seconds      = 20
+meraki_base_url              = "https://api.meraki.com/api/v1"
+meraki_poll_paths            = "/organizations"
+meraki_poll_interval_seconds = 300
+webhook_auth_required        = true
+processor_poll_wait_seconds  = 20
