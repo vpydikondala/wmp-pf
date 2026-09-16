@@ -1,6 +1,9 @@
 data "aws_iam_policy_document" "application_kms" {
   count = var.deployment.kms ? 1 : 0
 
+  #checkov:skip=CKV_AWS_109:KMS key policy grants the account root principal authority to administer this specific key
+  #checkov:skip=CKV_AWS_111:KMS key policy Resource "*" refers to the KMS key to which this policy is attached
+  #checkov:skip=CKV_AWS_356:KMS key policies use Resource "*" because the policy is scoped by attachment to this specific KMS key
   statement {
     sid    = "EnableAccountPermissions"
     effect = "Allow"
@@ -31,7 +34,8 @@ data "aws_iam_policy_document" "application_kms" {
       "kms:DescribeKey"
     ]
 
-    resources = ["aws_kms_key.application.arn"]
+    # KMS key policies use "*" for the key the policy is attached to.
+    resources = ["*"]
 
     condition {
       test     = "ArnLike"

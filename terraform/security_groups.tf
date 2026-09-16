@@ -36,6 +36,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_test_cidrs" {
   description       = "Explicit direct ALB test ingress"
 }
 
+#checkov:skip=CKV2_AWS_5:ECS security groups are attached to Fargate task ENIs through each ECS service network_configuration
 resource "aws_security_group" "ecs" {
   for_each = local.enabled_ecs_services
 

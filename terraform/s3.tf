@@ -56,13 +56,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   bucket = aws_s3_bucket.data[0].id
 
   rule {
-    id     = "noncurrent-version-retention"
+    id     = "log-retention"
     status = "Enabled"
 
     filter {}
 
+    expiration {
+      days = 365
+    }
+
     noncurrent_version_expiration {
-      noncurrent_days = var.s3_data_retention_days
+      noncurrent_days = 30
     }
   }
 
