@@ -1,0 +1,19 @@
+name: Deploy PROD Blue Green
+on:
+  workflow_dispatch:
+jobs:
+  plan:
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: prod
+      terraform_environment: prod
+      mode: plan
+      artifact_name: prod-tfplan
+  apply:
+    needs: plan
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: prod
+      terraform_environment: prod
+      mode: apply
+      plan_source_artifact: prod-tfplan

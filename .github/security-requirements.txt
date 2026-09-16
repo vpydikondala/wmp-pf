@@ -1,0 +1,4 @@
+checkov
+bandit
+pip-audit
+pytest

@@ -1,0 +1,19 @@
+name: Deploy UAT
+on:
+  workflow_dispatch:
+jobs:
+  plan:
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: uat
+      terraform_environment: uat
+      mode: plan
+      artifact_name: uat-tfplan
+  apply:
+    needs: plan
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: uat
+      terraform_environment: uat
+      mode: apply
+      plan_source_artifact: uat-tfplan

@@ -1,0 +1,21 @@
+name: Deploy DEV
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  plan:
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: dev
+      terraform_environment: dev
+      mode: plan
+      artifact_name: dev-tfplan
+  apply:
+    needs: plan
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      environment: dev
+      terraform_environment: dev
+      mode: apply
+      plan_source_artifact: dev-tfplan

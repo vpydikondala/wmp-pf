@@ -1,0 +1,5 @@
+* @REPLACE_ORG/platform-team
+/terraform/ @REPLACE_ORG/cloud-platform @REPLACE_ORG/security
+/bootstrap/ @REPLACE_ORG/cloud-platform @REPLACE_ORG/security
+/.github/workflows/ @REPLACE_ORG/platform-team @REPLACE_ORG/security
+/terraform/environments/prod.tfvars @REPLACE_ORG/cloud-platform @REPLACE_ORG/security

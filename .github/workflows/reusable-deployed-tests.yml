@@ -1,0 +1,73 @@
+name: Reusable Deployed Tests
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      terraform_environment:
+        required: true
+        type: string
+      run_performance:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deployed-tests:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION || '1.16.2' }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-${{ inputs.terraform_environment }}-verify
+      - name: Terraform init and resolve endpoint
+        id: endpoint
+        shell: bash
+        run: |
+          terraform init -reconfigure \
+            -backend-config="backends/${{ inputs.terraform_environment }}.hcl" \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="kms_key_id=${{ vars.TF_STATE_KMS_KEY_ARN }}"
+          DOMAIN=$(terraform output -raw cloudfront_domain_name)
+          test -n "$DOMAIN"
+          echo "base_url=https://${DOMAIN}" >> "$GITHUB_OUTPUT"
+      - name: Health smoke test
+        working-directory: .
+        env:
+          SMOKE_BASE_URL: ${{ steps.endpoint.outputs.base_url }}
+        run: ./scripts/smoke-test.sh "${{ inputs.terraform_environment }}"
+      - name: Functional webhook smoke test
+        if: vars.RUN_FUNCTIONAL_SMOKE == 'true'
+        working-directory: .
+        env:
+          SMOKE_BASE_URL: ${{ steps.endpoint.outputs.base_url }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_TEST_SECRET }}
+        run: ./scripts/functional-smoke-test.sh
+      - name: Performance gate
+        if: inputs.run_performance
+        working-directory: .
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_TEST_SECRET }}
+          PERF_USERS: ${{ vars.PERF_USERS || '10' }}
+          PERF_SPAWN_RATE: ${{ vars.PERF_SPAWN_RATE || '2' }}
+          PERF_DURATION: ${{ vars.PERF_DURATION || '30s' }}
+          PERF_FAIL_RATIO: ${{ vars.PERF_FAIL_RATIO || '0.01' }}
+          PERF_P95_LIMIT_MS: ${{ vars.PERF_P95_LIMIT_MS || '1500' }}
+          PERF_MIN_RPS: ${{ vars.PERF_MIN_RPS || '1' }}
+        run: ./scripts/performance-test.sh "${{ steps.endpoint.outputs.base_url }}"
