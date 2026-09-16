@@ -81,16 +81,25 @@ jobs:
       - name: actionlint
         uses: raven-actions/actionlint@v2
 
+
   container-security:
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
         service: [inbound, outbound, processor, management]
+
     steps:
       - uses: actions/checkout@v6.1.0
+
       - name: Build container
-        run: docker build -f services/${{ matrix.service }}/Dockerfile -t occupancy-${{ matrix.service }}:${GITHUB_SHA} .
+        run: |
+          docker build \
+          -f "services/${{ matrix.service }}/Dockerfile" \
+          -t "occupancy-${{ matrix.service }}:${GITHUB_SHA}" \
+          .
+
       - name: Trivy HIGH/CRITICAL gate
         run: |
           docker run --rm \
@@ -99,7 +108,7 @@ jobs:
             --exit-code 1 \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
-            occupancy-${{ matrix.service }}:${GITHUB_SHA}
+            "occupancy-${{ matrix.service }}:${GITHUB_SHA}"
 
   integration:
     runs-on: ubuntu-latest

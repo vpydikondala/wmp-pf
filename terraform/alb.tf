@@ -7,7 +7,7 @@ resource "aws_lb" "internal" {
   security_groups    = [aws_security_group.alb[0].id]
   subnets            = [for az in local.two_azs : aws_subnet.alb[az].id]
 
-  enable_deletion_protection = var.environment == "prod"
+  enable_deletion_protection = true
   drop_invalid_header_fields = true
 
   dynamic "access_logs" {

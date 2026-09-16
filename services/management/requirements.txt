@@ -3,4 +3,5 @@ uvicorn[standard]==0.35.0
 pydantic==2.11.7
 psycopg[binary]>=3.3,<4
 boto3>=1.35,<2
-httpx==0.28.1
+#httpx==0.28.1
+httpx2==0.28.1
