@@ -3,6 +3,11 @@ resource "aws_s3_bucket" "data" {
   bucket        = local.data_bucket_name
   force_destroy = var.data_bucket_force_destroy
 
+  # Event notifications are not required for this application data bucket.
+  # Cross-region replication is outside the scope of this functional test environment.
+  #checkov:skip=CKV2_AWS_62:Application data bucket does not require S3 event-driven processing
+  #checkov:skip=CKV_AWS_144:Functional test environment does not require cross-region disaster recovery
+
   tags = {
     Name = local.data_bucket_name
     Type = "application-data"
@@ -56,17 +61,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   bucket = aws_s3_bucket.data[0].id
 
   rule {
-    id     = "log-retention"
+    id     = "data-noncurrent-version-retention"
     status = "Enabled"
 
     filter {}
 
-    expiration {
-      days = 365
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days = var.s3_data_retention_days
     }
   }
 
@@ -99,10 +104,21 @@ resource "aws_s3_bucket_policy" "data_tls" {
   })
 }
 
+
+# -----------------------------------------------------------------------------
+# Central log archive bucket
+# -----------------------------------------------------------------------------
+
 resource "aws_s3_bucket" "logs" {
   count         = var.deployment.log_bucket ? 1 : 0
   bucket        = local.log_bucket_name
   force_destroy = var.log_bucket_force_destroy
+
+  # The central log archive is a destination, not an event-processing bucket.
+  # Cross-region replication is outside the scope of this functional test environment.
+  #checkov:skip=CKV2_AWS_62:Central log archive does not require S3 event-driven processing
+  #checkov:skip=CKV_AWS_144:Functional test environment does not require cross-region disaster recovery
+  #checkov:skip=CKV_AWS_145:Log delivery bucket uses S3 managed encryption for compatibility with AWS log delivery services
 
   tags = {
     Name = local.log_bucket_name
@@ -140,6 +156,32 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  count  = var.deployment.log_bucket ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  rule {
+    id     = "log-retention"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    expiration {
+      days = 365
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.logs]
+}
+
 data "aws_iam_policy_document" "log_bucket" {
   count = var.deployment.log_bucket ? 1 : 0
 
@@ -153,6 +195,7 @@ data "aws_iam_policy_document" "log_bucket" {
     }
 
     actions = ["s3:*"]
+
     resources = [
       aws_s3_bucket.logs[0].arn,
       "${aws_s3_bucket.logs[0].arn}/*"
@@ -167,6 +210,7 @@ data "aws_iam_policy_document" "log_bucket" {
 
   dynamic "statement" {
     for_each = var.deployment.alb ? [1] : []
+
     content {
       sid    = "AllowALBLogDelivery"
       effect = "Allow"
@@ -177,6 +221,7 @@ data "aws_iam_policy_document" "log_bucket" {
       }
 
       actions = ["s3:PutObject"]
+
       resources = [
         "${aws_s3_bucket.logs[0].arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
       ]
@@ -185,6 +230,7 @@ data "aws_iam_policy_document" "log_bucket" {
 
   dynamic "statement" {
     for_each = var.deployment.waf ? [1] : []
+
     content {
       sid    = "AWSWAFLogDeliveryAclCheck"
       effect = "Allow"
@@ -198,7 +244,10 @@ data "aws_iam_policy_document" "log_bucket" {
         "s3:GetBucketAcl",
         "s3:ListBucket"
       ]
-      resources = [aws_s3_bucket.logs[0].arn]
+
+      resources = [
+        aws_s3_bucket.logs[0].arn
+      ]
 
       condition {
         test     = "StringEquals"
@@ -216,6 +265,7 @@ data "aws_iam_policy_document" "log_bucket" {
 
   dynamic "statement" {
     for_each = var.deployment.waf ? [1] : []
+
     content {
       sid    = "AWSWAFLogDeliveryWrite"
       effect = "Allow"
@@ -226,6 +276,7 @@ data "aws_iam_policy_document" "log_bucket" {
       }
 
       actions = ["s3:PutObject"]
+
       resources = [
         "${aws_s3_bucket.logs[0].arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
       ]

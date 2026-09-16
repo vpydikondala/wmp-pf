@@ -37,6 +37,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_test_cidrs" {
 }
 
 #checkov:skip=CKV2_AWS_5:ECS security groups are attached to Fargate task ENIs through each ECS service network_configuration
+#checkov:skip=CKV2_AWS_5:ECS security groups are attached to Fargate task ENIs through ECS service network_configuration
 resource "aws_security_group" "ecs" {
   for_each = local.enabled_ecs_services
 
@@ -47,6 +48,17 @@ resource "aws_security_group" "ecs" {
   tags = {
     Name    = "${local.name_prefix}-sg-${each.key}"
     Service = each.key
+  }
+}
+
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  ingress = []
+  egress  = []
+
+  tags = {
+    Name = "${local.name_prefix}-default-deny"
   }
 }
 

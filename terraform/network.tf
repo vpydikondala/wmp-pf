@@ -8,6 +8,17 @@ resource "aws_vpc" "main" {
   }
 }
 
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = {
+    Name = "${local.name_prefix}-vpc-flow-log"
+  }
+}
+
 resource "aws_internet_gateway" "main" {
   # CloudFront VPC Origins require an IGW attached to the VPC even though
   # origin traffic itself does not route through the IGW.

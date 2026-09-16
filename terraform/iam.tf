@@ -184,3 +184,52 @@ resource "aws_iam_role_policy_attachment" "ecs_blue_green_infrastructure" {
   role       = aws_iam_role.ecs_blue_green_infrastructure[0].name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }
+
+# -----------------------------------------------------------------------------
+# VPC Flow Logs
+# -----------------------------------------------------------------------------
+
+data "aws_iam_policy_document" "vpc_flow_logs_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs" {
+  name               = "${local.name_prefix}-vpc-flow-logs"
+  assume_role_policy = data.aws_iam_policy_document.vpc_flow_logs_assume.json
+
+  tags = {
+    Purpose = "vpc-flow-logs"
+  }
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs" {
+  statement {
+    sid    = "WriteFlowLogs"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+
+    resources = [
+      "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name   = "${local.name_prefix}-vpc-flow-logs"
+  role   = aws_iam_role.vpc_flow_logs.id
+  policy = data.aws_iam_policy_document.vpc_flow_logs.json
+}
