@@ -70,12 +70,12 @@ resource "aws_cloudfront_distribution" "api" {
 
   web_acl_id = var.deployment.waf ? aws_wafv2_web_acl.cloudfront[0].arn : null
 
-restrictions {
-  geo_restriction {
-    restriction_type = "whitelist"
-    locations        = ["GB"]
+  restrictions {
+    geo_restriction {
+      restriction_type = "whitelist"
+      locations        = ["GB"]
+    }
   }
-}
 
   tags = {
     Name = "${local.name_prefix}-cloudfront"
