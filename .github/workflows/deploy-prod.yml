@@ -1,6 +1,11 @@
 name: Deploy PROD Blue Green
 on:
   workflow_dispatch:
+    
+permissions:
+  contents: read
+  id-token: write
+  
 jobs:
   plan:
     uses: ./.github/workflows/reusable-terraform.yml
