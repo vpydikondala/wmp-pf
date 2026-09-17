@@ -56,6 +56,42 @@ jobs:
         with:
           terraform_version: ${{ vars.TERRAFORM_VERSION || '1.16.2' }}
 
+      - name: Debug GitHub OIDC claims
+        if: inputs.mode == 'plan'
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          RESPONSE="$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")"
+
+          TOKEN="$(echo "$RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
+
+          PAYLOAD="$(echo "$TOKEN" | cut -d. -f2)"
+
+          python3 - "$PAYLOAD" <<'PY'
+          import base64
+          import json
+          import sys
+
+          payload = sys.argv[1]
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(
+              base64.urlsafe_b64decode(payload.encode()).decode()
+          )
+
+          print("OIDC issuer:", claims.get("iss"))
+          print("OIDC audience:", claims.get("aud"))
+          print("OIDC subject:", claims.get("sub"))
+          print("Repository:", claims.get("repository"))
+          print("Environment:", claims.get("environment"))
+          print("Repository owner ID:", claims.get("repository_owner_id"))
+          print("Repository ID:", claims.get("repository_id"))
+          PY
+
       - name: Configure AWS credentials - plan
         if: inputs.mode == 'plan'
         uses: aws-actions/configure-aws-credentials@v6.2.3
