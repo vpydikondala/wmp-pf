@@ -1,0 +1,44 @@
+name: phase2-infra-deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, uat, prod]
+        required: true
+      action:
+        type: choice
+        options: [plan, apply]
+        required: true
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: phase2-infra-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: phase2/infra-deploy/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.action == 'apply' && vars.AWS_INFRA_APPLY_ROLE_ARN || vars.AWS_INFRA_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Init
+        run: >
+          terraform init -reconfigure
+          -backend-config="backends/${{ inputs.environment }}.hcl"
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="kms_key_id=${{ vars.TF_STATE_KMS_KEY_ARN }}"
+      - run: terraform validate
+      - name: Plan
+        run: terraform plan -var-file="environments/${{ inputs.environment }}.tfvars" -out=tfplan
+      - name: Apply
+        if: inputs.action == 'apply'
+        run: terraform apply -auto-approve tfplan

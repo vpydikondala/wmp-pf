@@ -1,0 +1,5 @@
+{
+  "dev":  {"account_id":"111111111111","state_bucket":"wmp-dev-tfstate","region":"eu-west-2"},
+  "uat":  {"account_id":"222222222222","state_bucket":"wmp-uat-tfstate","region":"eu-west-2"},
+  "prod": {"account_id":"333333333333","state_bucket":"wmp-prod-tfstate","region":"eu-west-2"}
+}

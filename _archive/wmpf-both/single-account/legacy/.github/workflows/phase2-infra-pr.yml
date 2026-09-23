@@ -1,0 +1,35 @@
+name: phase2-infra-pr
+on:
+  pull_request:
+    paths:
+      - "phase2/infra-deploy/**"
+      - "legacy/.github/workflows/phase2-infra-*.yml"
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  validate-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phase2/infra-deploy/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: phase2/infra-deploy
+          framework: terraform,github_actions
+          soft_fail: false
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: phase2/infra-deploy
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

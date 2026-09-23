@@ -17,6 +17,8 @@ github_oidc_subjects = {
 
   uat_plan   = "repo:vpydikondala/wmp-pf:environment:uat"
   uat_apply  = "repo:vpydikondala/wmp-pf:environment:uat"
-  prod_plan  = "repo:vpydikondala/wmp-pf:environment:prod"
-  prod_apply = "repo:vpydikondala/wmp-pf:environment:prod"
+  #prod_plan  = "repo:vpydikondala/wmp-pf:environment:prod"
+  #prod_apply = "repo:vpydikondala/wmp-pf:environment:prod"
+  prod_plan  = "repo:vpydikondala@29556576/wmp-pf@1372125861:environment:prod"
+  prod_apply = "repo:vpydikondala@29556576/wmp-pf@1372125861:environment:prod"
 }

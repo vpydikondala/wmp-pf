@@ -1,0 +1,1 @@
+"""Workplace Management service."""

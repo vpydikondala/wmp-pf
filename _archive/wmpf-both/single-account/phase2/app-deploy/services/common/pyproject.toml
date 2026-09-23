@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "occupancy-common"
+version = "0.1.0"
+description = "Shared runtime helpers for the Workplace Management telemetry services"
+requires-python = ">=3.12"
+dependencies = [
+  "boto3>=1.35,<2",
+  "botocore>=1.35,<2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["occupancy_common*"]
