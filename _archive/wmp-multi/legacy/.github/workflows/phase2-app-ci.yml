@@ -1,0 +1,49 @@
+name: phase2-app-ci
+on:
+  pull_request:
+    paths:
+      - "phase2/app-deploy/**"
+      - "legacy/.github/workflows/phase2-app-*.yml"
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [inbound, processor, management, dashboard_sync]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: |
+          pip install -r phase2/app-deploy/services/${{ matrix.service }}/requirements.txt
+          pip install pytest pytest-cov ruff bandit pip-audit
+      - run: ruff check phase2/app-deploy/services/${{ matrix.service }}
+      - run: bandit -r phase2/app-deploy/services/${{ matrix.service }}/src -ll
+      - run: pip-audit -r phase2/app-deploy/services/${{ matrix.service }}/requirements.txt
+      - env:
+          PYTHONPATH: phase2/app-deploy/services/common:phase2/app-deploy/services/${{ matrix.service }}/src
+        run: pytest -q phase2/app-deploy/services/${{ matrix.service }}/tests --cov-fail-under=60
+  container-security:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [inbound, processor, management, dashboard_sync]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t local/${{ matrix.service }}:${{ github.sha }} phase2/app-deploy/services/${{ matrix.service }}
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: local/${{ matrix.service }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: anchore/sbom-action@v0
+        with:
+          image: local/${{ matrix.service }}:${{ github.sha }}
+          artifact-name: ${{ matrix.service }}-${{ github.sha }}.spdx.json
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

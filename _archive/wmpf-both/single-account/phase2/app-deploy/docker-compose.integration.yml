@@ -1,0 +1,111 @@
+services:
+  localstack:
+    image: localstack/localstack:4.8
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3,sqs,secretsmanager
+      AWS_DEFAULT_REGION: eu-west-2
+      DEBUG: "0"
+      SQS_ENDPOINT_STRATEGY: path
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_localstack/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: occupancy
+      POSTGRES_USER: platform_admin
+      POSTGRES_PASSWORD: integration-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_admin -d occupancy"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  mock-meraki:
+    build:
+      context: .
+      dockerfile: services/mock-meraki/Dockerfile
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  inbound:
+    build:
+      context: .
+      dockerfile: services/inbound/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ENVIRONMENT: integration
+      SERVICE_NAME: inbound
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      DATA_BUCKET: integration-data
+      PROCESSING_QUEUE_URL: ${PROCESSING_QUEUE_URL}
+      MERAKI_SECRET_ARN: integration-meraki
+      WEBHOOK_AUTH_REQUIRED: "true"
+    depends_on:
+      localstack:
+        condition: service_healthy
+
+  processor:
+    build:
+      context: .
+      dockerfile: services/processor/Dockerfile
+    environment:
+      ENVIRONMENT: integration
+      SERVICE_NAME: processor
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      PROCESSING_QUEUE_URL: ${PROCESSING_QUEUE_URL}
+      DATALAKE_QUEUE_URL: ${DATALAKE_QUEUE_URL}
+      RDS_ENDPOINT: postgres
+      RDS_PORT: "5432"
+      RDS_DATABASE: occupancy
+      RDS_SECRET_ARN: integration-rds
+      PROCESSOR_POLL_WAIT_SECONDS: "1"
+      PROCESSOR_FAILURE_BACKOFF_SECONDS: "1"
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  outbound:
+    build:
+      context: .
+      dockerfile: services/outbound/Dockerfile
+    environment:
+      ENVIRONMENT: integration
+      SERVICE_NAME: outbound
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      DATA_BUCKET: integration-data
+      PROCESSING_QUEUE_URL: ${PROCESSING_QUEUE_URL}
+      MERAKI_SECRET_ARN: integration-meraki
+      MERAKI_BASE_URL: http://mock-meraki:8081/api/v1
+      MERAKI_POLL_PATHS: /organizations
+      MERAKI_POLL_INTERVAL_SECONDS: "5"
+      MERAKI_FAILURE_BACKOFF_SECONDS: "1"
+    depends_on:
+      localstack:
+        condition: service_healthy
+      mock-meraki:
+        condition: service_healthy

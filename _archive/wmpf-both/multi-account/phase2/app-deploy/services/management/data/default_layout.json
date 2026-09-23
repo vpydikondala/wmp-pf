@@ -1,0 +1,27 @@
+{
+  "site": {"id": "london-hq", "name": "London HQ"},
+  "floor": {"id": "floor-03", "name": "Floor 3", "width": 100, "height": 100},
+  "zones": [
+    {"id": "zone-a", "name": "Product & Engineering", "polygon": [{"x": 4,"y": 5},{"x": 49,"y": 5},{"x": 49,"y": 70},{"x": 4,"y": 70}]},
+    {"id": "zone-b", "name": "Sales & Operations", "polygon": [{"x": 51,"y": 5},{"x": 96,"y": 5},{"x": 96,"y": 70},{"x": 51,"y": 70}]},
+    {"id": "zone-c", "name": "Collaboration", "polygon": [{"x": 4,"y": 73},{"x": 96,"y": 73},{"x": 96,"y": 96},{"x": 4,"y": 96}]}
+  ],
+  "desks": [
+    {"id":"A-01","name":"A-01","zone_id":"zone-a","x":12,"y":18,"radius":4},
+    {"id":"A-02","name":"A-02","zone_id":"zone-a","x":25,"y":18,"radius":4},
+    {"id":"A-03","name":"A-03","zone_id":"zone-a","x":38,"y":18,"radius":4},
+    {"id":"A-04","name":"A-04","zone_id":"zone-a","x":12,"y":38,"radius":4},
+    {"id":"A-05","name":"A-05","zone_id":"zone-a","x":25,"y":38,"radius":4},
+    {"id":"A-06","name":"A-06","zone_id":"zone-a","x":38,"y":38,"radius":4},
+    {"id":"B-01","name":"B-01","zone_id":"zone-b","x":62,"y":18,"radius":4},
+    {"id":"B-02","name":"B-02","zone_id":"zone-b","x":75,"y":18,"radius":4},
+    {"id":"B-03","name":"B-03","zone_id":"zone-b","x":88,"y":18,"radius":4},
+    {"id":"B-04","name":"B-04","zone_id":"zone-b","x":62,"y":38,"radius":4},
+    {"id":"B-05","name":"B-05","zone_id":"zone-b","x":75,"y":38,"radius":4},
+    {"id":"B-06","name":"B-06","zone_id":"zone-b","x":88,"y":38,"radius":4}
+  ],
+  "access_points": [
+    {"id":"AP-01","serial":"Q2XX-LAB-0001","x":25,"y":55},
+    {"id":"AP-02","serial":"Q2XX-LAB-0002","x":75,"y":55}
+  ]
+}

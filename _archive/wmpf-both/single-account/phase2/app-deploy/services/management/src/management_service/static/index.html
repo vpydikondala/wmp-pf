@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Workplace Management</title><style>body{font-family:system-ui;margin:2rem;max-width:1200px}nav button{margin:.25rem}section{margin-top:1.5rem}input,select,textarea,button{padding:.55rem;margin:.2rem}table{border-collapse:collapse;width:100%;margin-top:1rem}th,td{border:1px solid #ddd;padding:.5rem;text-align:left}pre{background:#f5f5f5;padding:1rem;overflow:auto}.row{display:flex;flex-wrap:wrap;gap:.4rem}.muted{color:#666}</style></head><body>
+<h1>Workplace Management</h1><p class="muted">RDS-backed administration for buildings, floors, zones, access points and desks.</p>
+<nav><button onclick="show('buildings')">Buildings</button><button onclick="show('floors')">Floors</button><button onclick="show('zones')">Zones</button><button onclick="show('access-points')">Access Points</button><button onclick="show('desks')">Desks</button></nav>
+<section><h2 id="title"></h2><div id="form" class="row"></div><button onclick="createItem()">Add</button><table><thead id="head"></thead><tbody id="body"></tbody></table></section>
+<script>
+const base='/api/v1/management'; let resource='buildings'; let cache={};
+const fields={
+'buildings':['name','code','address','timezone'],
+'floors':['building_id','name','floor_number','map_width','map_height'],
+'zones':['floor_id','name','zone_type','capacity'],
+'access-points':['floor_id','zone_id','serial','name','mac_address','x','y'],
+'desks':['floor_id','zone_id','name','x','y']};
+async function show(r){resource=r; document.querySelector('#title').textContent=r.replace('-',' '); const f=document.querySelector('#form'); f.innerHTML=''; fields[r].forEach(x=>{const i=document.createElement('input');i.id='f_'+x;i.placeholder=x;f.appendChild(i)}); await load()}
+async function load(){const rows=await fetch(`${base}/${resource}`).then(r=>r.json());cache[resource]=rows; const cols=['id',...fields[resource]];document.querySelector('#head').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'<th>action</th></tr>';document.querySelector('#body').innerHTML=rows.map(x=>'<tr>'+cols.map(c=>`<td>${x[c]??''}</td>`).join('')+`<td><button onclick="del('${x.id}')">Delete</button></td></tr>`).join('')}
+function payload(){const o={active:true};for(const f of fields[resource]){let v=document.querySelector('#f_'+f).value;if(v==='')v=null;if(['floor_number','capacity'].includes(f)&&v!==null)v=Number(v);if(['map_width','map_height','x','y'].includes(f)&&v!==null)v=Number(v);o[f]=v}if(resource==='buildings'&&!o.timezone)o.timezone='Europe/London';if(resource==='zones')o.polygon=[];return o}
+async function createItem(){const r=await fetch(`${base}/${resource}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload())});if(!r.ok){alert(await r.text());return}await load()}
+async function del(id){if(!confirm('Delete this record?'))return;const r=await fetch(`${base}/${resource}/${id}`,{method:'DELETE'});if(!r.ok){alert(await r.text());return}await load()}
+show('buildings');
+</script></body></html>

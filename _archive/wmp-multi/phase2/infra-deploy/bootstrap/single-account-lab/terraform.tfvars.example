@@ -1,0 +1,19 @@
+aws_region        = "eu-west-2"
+project_name      = "occupancy-platform"
+owner             = "platform-team"
+state_bucket_name = "wmp-tfstate"
+state_kms_key_arn = "arn:aws:kms:eu-west-2:REPLACE_ACCOUNT:key/REPLACE_KEY_ID"
+
+# Leave null when this stack should create the single GitHub Actions OIDC provider.
+existing_github_oidc_provider_arn = null
+
+# Replace YOUR-ORG/YOUR-REPO with the real GitHub repository.
+# One OIDC provider is shared; environment-specific roles are separated by sub claim.
+github_oidc_subjects = {
+  dev_plan   = "repo:YOUR-ORG/YOUR-REPO:environment:dev"
+  dev_apply  = "repo:YOUR-ORG/YOUR-REPO:environment:dev"
+  uat_plan   = "repo:YOUR-ORG/YOUR-REPO:environment:uat"
+  uat_apply  = "repo:YOUR-ORG/YOUR-REPO:environment:uat"
+  prod_plan  = "repo:YOUR-ORG/YOUR-REPO:environment:prod"
+  prod_apply = "repo:YOUR-ORG/YOUR-REPO:environment:prod"
+}
