@@ -1,0 +1,283 @@
+Moving configuration between locations can affect deployment, even when the application code stays the same. A Terraform plan is necessary, but it does not verify everything.
+The outcome depends on whether the value, its format, permissions and the way it is loaded remain correct.
+Change	What could go wrong	Checks to run
+GitHub variable → .tfvars	Wrong environment, type or missing -var-file	Format, validate and fresh plan
+.tfvars → GitHub variable	Workflow does not pass it to Terraform	Check workflow wiring and plan using the actual inputs
+GitHub secret → Secrets Manager	Incorrect ARN, missing secret version, IAM/KMS denial	Plan, permissions review and runtime smoke test
+Change secret ARN	ECS still references the old secret	Inspect task definition and verify deployment
+Change backend settings	Terraform connects to another state/key	Verify backend and state before planning
+GitHub values are not automatically available to Terraform. The workflow must pass them, for example through TF_VAR_variable_name, -var-file, or another explicitly configured method.
+Likewise, storing a secret in Secrets Manager does not automatically connect the application to it. The application or ECS task definition must reference it, and the appropriate role must have access.
+For your project, use this process:
+1.	Move the value and update its reference. Preserve its type and format. Check for duplicate definitions that could override it.
+2.	Run the existing pre-commit checks and secret scanning. Do not put real credentials in committed .tfvars.
+3.	Create a fresh plan using the intended environment inputs. Review unexpected replacements, deletions, secret ARN changes and IAM changes.
+4.	After deployment, run targeted smoke tests: management login/health and the service that consumes the moved secret.
+5.	Remove the old source after the new configuration works, so rollback remains possible.
+You generally do not need to repeat every unit and performance test for a configuration-only move. Run the checks relevant to the change. If you change application code that loads the secret, rerun that service’s tests and rebuild its image.
+Two important details for your setup:
+•	If ECS injects a secret at task startup, updated values require new tasks. If your application fetches Secrets Manager itself, refresh depends on its fetching/caching behaviour.
+•	Local Terraform does not read GitHub repository variables or secrets automatically. Supply the equivalent inputs locally.
+Expect no infrastructure changes when only the input source changes and the resolved values remain identical. However, a clean plan cannot prove that a running task can retrieve and use a secret successfully.
+
+
+Start with a read-only audit. Do not move values, rotate credentials or delete branches until you know which commit and configuration production uses. The most recently updated branch is not necessarily the deployed branch.
+Run the following from VS Code → Terminal → New Terminal, using WSL.
+1. Confirm the repository, branch and account
+cd /mnt/c/PoC/wmp
+
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git remote -v
+
+gh --version
+gh auth status
+
+aws sts get-caller-identity
+aws configure get region
+If gh is unavailable, use GitHub’s web interface initially.
+Check that the repository remote and AWS account are the intended ones. Keep uncommitted work intact before switching branches.
+2. Identify branches and recent changes
+git fetch origin
+
+git branch -a
+
+git for-each-ref \
+  --sort=-committerdate \
+  --format='%(committerdate:iso8601) %(refname:short) %(objectname:short) %(subject)' \
+  refs/remotes/origin
+This shows branch-tip commit dates. It does not prove when a branch was created or deployed.
+Check GitHub’s default branch and recent workflow runs:
+gh repo view --json nameWithOwner,defaultBranchRef
+
+gh run list --limit 20 \
+  --json workflowName,headBranch,headSha,status,conclusion,createdAt
+Identify the successful production deployment run, then compare its commit with the deployed ECS image/task definition. A successful CI run alone is not deployment evidence.
+For a candidate branch, compare it with the default branch. Replace main if necessary:
+git log --oneline origin/main..origin/feature/management-spatial-auth
+
+git diff --stat \
+  origin/main...origin/feature/management-spatial-auth
+
+git diff \
+  origin/main...origin/feature/management-spatial-auth \
+  -- .github/workflows scripts phase2
+In GitHub, use Pull requests, Actions and the branch comparison page. In VS Code, the bottom-left branch indicator shows your current checkout; the Source Control graph helps inspect commits.
+3. Inventory local configuration references
+Find files first:
+rg --files --hidden \
+  -g '!.git/**' \
+  -g '!**/.terraform/**' \
+  -g '!**/.venv*/**' \
+  -g '*.tfvars' \
+  -g '*.tfvars.json' \
+  -g '*.hcl' \
+  -g '.env*'
+Find files that pass configuration, without printing matching values:
+rg -l --hidden \
+  'TF_VAR_|vars\.|secrets\.|-var-file|-backend-config|secret_arn|kms_key_id' \
+  .github scripts phase2 \
+  -g '!**/.terraform/**' \
+  -g '!**/.venv*/**'
+List the names of exported Terraform variables without displaying their values:
+python - <<'PY'
+import os
+for name in sorted(os.environ):
+    if name.startswith("TF_VAR_"):
+        print(name)
+PY
+Inspect the identified files privately in VS Code. Record where each value comes from and which service consumes it.
+4. Inventory GitHub variables and secrets
+From the repository root:
+# Repository scope
+gh variable list
+gh secret list
+
+# Production environment scope — use its actual name
+gh variable list --env production
+gh secret list --env production
+List environment names:
+gh api --paginate \
+  repos/{owner}/{repo}/environments \
+  --jq '.environments[].name'
+For an organisation-owned repository, also check:
+gh variable list --org YOUR_ORGANISATION
+gh secret list --org YOUR_ORGANISATION
+Organisation visibility depends on your permissions. An access error does not prove no configuration exists. GitHub CLI supports repository, environment and organisation scopes. Take GitHub to the command line
+Secret listings show names and metadata, not secret values. GitHub cannot reveal the stored plaintext back to you. Also inspect whether organisation secrets are available to this repository.
+In GitHub’s UI:
+•	Repository Settings → Secrets and variables → Actions
+•	Repository Settings → Environments → production
+•	Organisation Settings → Secrets and variables → Actions
+Build this inventory:
+Name	Scope/source	Consumer	Intended replacement	Owner
+Example CPU setting	Production variable	App Terraform	prod.tfvars	Delivery team
+Meraki credential	Repository secret	Poller	Secrets Manager	Integration owner
+KMS ARN	Terraform output	Encryption/IAM	Preserve reference	Cloud team
+Check duplicates carefully. A value present at several scopes can be overridden.
+5. Inspect AWS Secrets Manager metadata
+List metadata without retrieving plaintext:
+aws secretsmanager list-secrets \
+  --region eu-west-2 \
+  --query 'SecretList[].{Name:Name,ARN:ARN,KMS:KmsKeyId,Rotation:RotationEnabled}' \
+  --output table
+For each relevant secret:
+export WMP_SECRET_ID='REPLACE_WITH_SECRET_NAME_OR_ARN'
+
+aws secretsmanager describe-secret \
+  --region eu-west-2 \
+  --secret-id "$WMP_SECRET_ID" \
+  --query '{Name:Name,ARN:ARN,KMS:KmsKeyId,Rotation:RotationEnabled,LastRotated:LastRotatedDate,Deleted:DeletedDate,Versions:VersionIdsToStages}' \
+  --output json
+Review its resource policy when applicable:
+aws secretsmanager get-resource-policy \
+  --region eu-west-2 \
+  --secret-id "$WMP_SECRET_ID"
+Check the secret’s consumer, region, current version, scheduled deletion and encryption key. describe-secret returns metadata rather than the secret value. AWS CLI 2.37.8 Command Reference
+Do not retrieve every secret merely to build an inventory.
+6. Check KMS health and rotation
+Use the actual key ARN from the secret metadata or state-bucket encryption configuration:
+export WMP_KMS_KEY_ARN='REPLACE_WITH_ACTUAL_KEY_ARN'
+
+aws kms describe-key \
+  --region eu-west-2 \
+  --key-id "$WMP_KMS_KEY_ARN" \
+  --query 'KeyMetadata.{ARN:Arn,State:KeyState,Enabled:Enabled,Usage:KeyUsage,Spec:KeySpec,Origin:Origin}' \
+  --output json
+
+aws kms get-key-rotation-status \
+  --region eu-west-2 \
+  --key-id "$WMP_KMS_KEY_ARN"
+
+aws kms list-key-rotations \
+  --region eu-west-2 \
+  --key-id "$WMP_KMS_KEY_ARN"
+
+aws kms get-key-policy \
+  --region eu-west-2 \
+  --key-id "$WMP_KMS_KEY_ARN" \
+  --policy-name default \
+  --query Policy \
+  --output text
+Interpret these separately:
+Check	What it proves
+Key enabled	Key is available for permitted operations
+Rotation enabled	Automatic rotation is configured
+Completed rotation history	Key material has actually rotated
+Successful application secret retrieval	Consumer permissions and decryption work
+A newly created key can have rotation enabled without completed rotation history. AWS provides separate rotation-status and rotation-history APIs. API Reference
+KMS key rotation is different from rotating a password/API key. Normal automatic KMS rotation preserves the key ARN and supports decrypting older ciphertext. Do not replace the key ARN or force rotation as part of this configuration audit.
+Test secret retrieval using the actual consumer role through an authorised test task or service smoke test. Success using your administrator account does not prove ECS can retrieve it.
+7. Confirm the production baseline
+Before moving configuration:
+1.	Confirm the production commit, image digest and task definition revision.
+2.	Confirm each Terraform root’s backend bucket/key and workspace.
+3.	Run the existing production plan process.
+4.	Investigate existing drift.
+5.	Compare the proposed input-source change against that baseline.
+For moving identical non-secret values, expect no resulting resource changes. Secret-reference changes can legitimately produce IAM and task-definition changes.
+8. Clean branches only after checking their purpose
+Do branch cleanup separately from configuration migration.
+Before deleting a branch, check:
+•	Open PRs and unmerged work.
+•	Whether a deployment workflow references that branch.
+•	OIDC trust policies containing that branch name.
+•	Whether it is a release, maintenance or rollback reference.
+•	Whether another colleague still owns active work.
+List open PRs and branches merged into the default branch:
+gh pr list --state open
+
+git branch -r --merged origin/main
+git branch -r --no-merged origin/main
+A squash-merged PR may not appear as Git-merged because commit ancestry differs. Check the PR and resulting code rather than relying only on --merged.
+Once the owner/team confirms a specific branch is obsolete:
+# Switch away first; ensure your working tree is clean
+git switch main
+
+# Delete the specific remote branch
+git push origin --delete OLD_BRANCH_NAME
+
+# Delete the local branch if Git considers it merged
+git branch -d OLD_BRANCH_NAME
+
+# Remove stale local references to deleted remote branches
+git fetch origin --prune
+fetch --prune cleans stale remote-tracking references; it does not delete active branches on GitHub. git-fetch Documentation
+Deleting a branch normally does not destroy AWS resources, but branch-triggered automation or deployment dependencies can change that risk. Avoid bulk deletion and forced local deletion while inheriting an unfamiliar repository.
+For work inherited from someone else, first produce the branch/configuration inventory and establish ownership. Then migrate one configuration category at a time, validate it, and clean up obsolete branches last.
+Yes. You can list only the names of GitHub variables and secrets, at repository level and for every environment, without displaying their values.
+Run this in the VS Code WSL terminal:
+1. Confirm the repository
+cd /mnt/c/PoC/wmp
+
+gh auth status
+gh repo view --json nameWithOwner --jq '.nameWithOwner'
+2. Repository-level names only
+gh variable list --json name --jq '.[].name'
+
+gh secret list --json name --jq '.[].name'
+3. Names for every environment
+Copy this entire block:
+(
+  set -euo pipefail
+
+  WMP_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+
+  printf '\nRepository: %s\n' "$WMP_REPO"
+
+  printf '\nRepository variables:\n'
+  gh variable list --repo "$WMP_REPO" \
+    --json name --jq '.[].name'
+
+  printf '\nRepository secrets:\n'
+  gh secret list --repo "$WMP_REPO" \
+    --json name --jq '.[].name'
+
+  WMP_ENVIRONMENTS=$(gh api --paginate \
+    "repos/$WMP_REPO/environments" \
+    --jq '.environments[].name')
+
+  while IFS= read -r WMP_ENVIRONMENT; do
+    [ -n "$WMP_ENVIRONMENT" ] || continue
+
+    printf '\nEnvironment: %s\n' "$WMP_ENVIRONMENT"
+
+    printf 'Variables:\n'
+    gh variable list --repo "$WMP_REPO" \
+      --env "$WMP_ENVIRONMENT" \
+      --json name --jq '.[].name'
+
+    printf 'Secrets:\n'
+    gh secret list --repo "$WMP_REPO" \
+      --env "$WMP_ENVIRONMENT" \
+      --json name --jq '.[].name'
+
+  done <<< "$WMP_ENVIRONMENTS"
+)
+Example output:
+Repository: organisation/wmp
+
+Repository variables:
+AWS_REGION
+PROJECT_NAME
+
+Repository secrets:
+EXAMPLE_SECRET
+
+Environment: dev
+Variables:
+AWS_PLAN_ROLE_ARN
+AWS_APPLY_ROLE_ARN
+Secrets:
+EXAMPLE_DEV_SECRET
+
+Environment: prod
+Variables:
+AWS_PLAN_ROLE_ARN
+AWS_APPLY_ROLE_ARN
+Secrets:
+EXAMPLE_PROD_SECRET
+The output contains names and scope labels only. An empty section means no entries were returned; a permission error must be investigated separately.
+This lists GitHub configuration stored at repository and environment scopes. It does not include organisation-level entries, workflow YAML env definitions, local environment variables or AWS Secrets Manager secrets.
+
